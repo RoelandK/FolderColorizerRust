@@ -30,6 +30,22 @@ cargo build --release
 
 Requires Rust and the `windows` + `image` crates (fetched automatically).
 
+## Architecture
+
+```
+src/
+├── main.rs           Entry point, window class registration, message loop
+├── app.rs            AppState struct, layout, wheel rendering cache
+├── color.rs          HSV/RGB conversion, hex parsing, swatch constants
+├── events.rs         Window event handlers (mouse, keyboard, timer, DPI)
+├── icon.rs           ICO file generation, folder apply/reset
+├── library.rs        Library and preset color file I/O
+├── render.rs         All painting/drawing (panels, cards, buttons, wheel)
+└── context_menu.rs   Shell context menu registry install/uninstall
+```
+
+Each module has a single responsibility. `AppState` is defined in `app.rs` and extended with `impl` blocks across `render.rs` and `events.rs`.
+
 ## How it works
 
 The app writes a `desktop.ini` file into the target folder pointing to a generated `.ico` file in `%LOCALAPPDATA%\FolderColorizerRust\`. Windows reads `desktop.ini` to display custom folder icons.
