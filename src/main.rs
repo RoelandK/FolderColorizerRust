@@ -1,4 +1,5 @@
-#![allow(non_snake_case, unused)]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(non_snake_case)]
 
 mod app;
 mod color;
@@ -15,6 +16,8 @@ use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::Graphics::GdiPlus::*;
 use windows::Win32::System::LibraryLoader::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+
+use std::sync::atomic::Ordering;
 
 use crate::app::AppState;
 use crate::app::{sys_dpi, G_GDI_TOKEN};
@@ -49,14 +52,14 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
             }
 
             WM_LBUTTONDOWN => {
-                let mx = (lparam.0 as u16) as i32;
-                let my = (lparam.0 >> 16) as i32;
+                let mx = (lparam.0 & 0xFFFF) as i16 as i32;
+                let my = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
                 a.on_lbuttondown(mx, my)
             }
 
             WM_RBUTTONDOWN => {
-                let mx = (lparam.0 as u16) as i32;
-                let my = (lparam.0 >> 16) as i32;
+                let mx = (lparam.0 & 0xFFFF) as i16 as i32;
+                let my = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
                 a.on_rbuttondown(mx, my)
             }
 
@@ -64,8 +67,8 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
                 if !a.mouse_down {
                     return DefWindowProcW(hwnd, msg, wparam, lparam);
                 }
-                let mx = (lparam.0 as u16) as i32;
-                let my = (lparam.0 >> 16) as i32;
+                let mx = (lparam.0 & 0xFFFF) as i16 as i32;
+                let my = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
                 if a.on_mousemove(mx, my, true) {
                     let _ = InvalidateRect(Some(a.hwnd), None, false);
                 }
@@ -182,10 +185,25 @@ extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM
     }
 }
 
+fn validate_folder_path(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    if path.starts_with("\\\\") {
+        return false;
+    }
+    if path.contains("..") {
+        return false;
+    }
+    p.is_absolute()
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 4 && args[1] == "--apply" {
         let folder = &args[2];
+        if !validate_folder_path(folder) {
+            eprintln!("Invalid folder path");
+            return;
+        }
         let hex_w: Vec<u16> = args[3].encode_utf16().collect();
         if let Some((r, g, b)) = parse_hex(&hex_w) {
             unsafe {
@@ -196,6 +214,10 @@ fn main() {
     }
     if args.len() >= 3 && args[1] == "--reset" {
         let folder = &args[2];
+        if !validate_folder_path(folder) {
+            eprintln!("Invalid folder path");
+            return;
+        }
         unsafe {
             reset_folder_color(folder);
         }
@@ -203,16 +225,18 @@ fn main() {
     }
 
     unsafe {
-        let mut input = GdiplusStartupInput {
+        let input = GdiplusStartupInput {
             GdiplusVersion: 1,
             DebugEventCallback: 0,
             SuppressBackgroundThread: false.into(),
             SuppressExternalCodecs: false.into(),
         };
-        let status = GdiplusStartup(&raw mut G_GDI_TOKEN, &input, null_mut());
+        let mut token: usize = 0;
+        let status = GdiplusStartup(&mut token, &input, null_mut());
         if status.0 != 0 {
             return;
         }
+        G_GDI_TOKEN.store(token, Ordering::Relaxed);
 
         let hinst = GetModuleHandleW(None).unwrap();
         let wc = WNDCLASSW {
@@ -281,6 +305,6 @@ fn main() {
             }
         }
 
-        GdiplusShutdown(G_GDI_TOKEN);
+        GdiplusShutdown(G_GDI_TOKEN.load(Ordering::Relaxed));
     }
 }

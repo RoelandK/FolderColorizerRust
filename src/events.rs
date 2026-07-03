@@ -15,6 +15,7 @@ use crate::context_menu::{
 };
 use crate::icon::{apply_folder_color, reset_folder_color};
 use crate::library::{load_library, load_presets, save_library, save_presets};
+use crate::render::{LIB_CARD_H_BASE, LIB_CARD_TOP};
 
 impl AppState {
     pub(crate) unsafe fn on_create(&mut self) -> LRESULT {
@@ -71,10 +72,10 @@ impl AppState {
             windows::core::w!("Segoe UI"),
         );
 
-        self.back_brush = CreateSolidBrush(COLORREF(rgb(0x1E, 0x1E, 0x1E)));
-        self.panel_brush = CreateSolidBrush(COLORREF(rgb(0x25, 0x25, 0x25)));
-        self.card_brush = CreateSolidBrush(COLORREF(rgb(0x2D, 0x2D, 0x2D)));
-        self.focus_pen = CreatePen(PS_SOLID, 2, COLORREF(rgb(0xFF, 0xFF, 0xFF)));
+        self.back_brush = CreateSolidBrush(COLORREF(colorref(0x1E, 0x1E, 0x1E)));
+        self.panel_brush = CreateSolidBrush(COLORREF(colorref(0x25, 0x25, 0x25)));
+        self.card_brush = CreateSolidBrush(COLORREF(colorref(0x2D, 0x2D, 0x2D)));
+        self.focus_pen = CreatePen(PS_SOLID, 2, COLORREF(colorref(0xFF, 0xFF, 0xFF)));
 
         self.hue = 0.58;
         self.sat = 0.7;
@@ -131,14 +132,14 @@ impl AppState {
         }
 
         // Library cards on left panel
-        let lib_card_h = scale_by(34, self.dpi);
+        let lib_card_h = scale_by(LIB_CARD_H_BASE, self.dpi);
         if mx < lx_w() {
             for i in 0..self.library.len() as i32 {
                 let ri = i + self.lib_scroll;
                 if ri < 0 || ri >= self.library.len() as i32 {
                     continue;
                 }
-                let sy = 56 + i * lib_card_h;
+                let sy = LIB_CARD_TOP + i * lib_card_h;
                 if my < sy || my >= sy + lib_card_h - 2 {
                     continue;
                 }
@@ -161,7 +162,7 @@ impl AppState {
                 if mx >= ap_x && mx < ap_x + ap_w {
                     if self.browse_ok && self.folder_path[0] != 0 {
                         let c = self.library[ri as usize];
-                        let (r8, g8, b8) = ((c >> 16) as u8, (c >> 8) as u8, c as u8);
+                        let (r8, g8, b8) = unpack_color(c);
                         let folder = String::from_utf16_lossy(&self.folder_path);
                         let folder = folder.trim_end_matches(char::from(0));
                         if apply_folder_color(folder, r8, g8, b8) {
@@ -176,23 +177,8 @@ impl AppState {
                 // Click on swatch/name area
                 if mx >= 8 && mx < ap_x {
                     let c = self.library[ri as usize];
-                    let (r8, g8, b8) = ((c >> 16) as u8, (c >> 8) as u8, c as u8);
-                    let rf = r8 as f32 / 255.0;
-                    let gf = g8 as f32 / 255.0;
-                    let bf = b8 as f32 / 255.0;
-                    let max = rf.max(gf).max(bf);
-                    let min = rf.min(gf).min(bf);
-                    let d = max - min;
-                    let h = if d == 0.0 {
-                        0.0
-                    } else if max == rf {
-                        60.0 * ((gf - bf) / d).rem_euclid(6.0)
-                    } else if max == gf {
-                        60.0 * ((bf - rf) / d + 2.0)
-                    } else {
-                        60.0 * ((rf - gf) / d + 4.0)
-                    };
-                    let s = if max == 0.0 { 0.0 } else { d / max };
+                    let (r8, g8, b8) = unpack_color(c);
+                    let (h, s, max) = rgb_to_hsv(r8, g8, b8);
                     if (ri as usize) < self.lib_names.len() {
                         let nb = &self.lib_names[ri as usize];
                         for j in 0..63 {
@@ -205,7 +191,7 @@ impl AppState {
                     } else {
                         self.name_pos = 0;
                     }
-                    self.hue = h / 360.0;
+                    self.hue = h;
                     self.sat = s;
                     self.val = max;
                     self.sel_swatch = -1;
@@ -230,28 +216,11 @@ impl AppState {
             let sy = ps_y + row * (self.l_swatch_sz + self.l_swatch_gap);
             if mx >= sx && mx < sx + self.l_swatch_sz && my >= sy && my < sy + self.l_swatch_sz {
                 let c = self.presets[i as usize];
-                let r8 = (c >> 16) as u8;
-                let g8 = (c >> 8) as u8;
-                let b8 = c as u8;
-                let rf = r8 as f32 / 255.0;
-                let gf = g8 as f32 / 255.0;
-                let bf = b8 as f32 / 255.0;
-                let max = rf.max(gf).max(bf);
-                let min = rf.min(gf).min(bf);
-                let d = max - min;
-                let h = if d == 0.0 {
-                    0.0
-                } else if max == rf {
-                    60.0 * ((gf - bf) / d).rem_euclid(6.0)
-                } else if max == gf {
-                    60.0 * ((bf - rf) / d + 2.0)
-                } else {
-                    60.0 * ((rf - gf) / d + 4.0)
-                };
-                let s = if max == 0.0 { 0.0 } else { d / max };
-                self.hue = h / 360.0;
+                let (r8, g8, b8) = unpack_color(c);
+                let (h, s, v) = rgb_to_hsv(r8, g8, b8);
+                self.hue = h;
                 self.sat = s;
-                self.val = max;
+                self.val = v;
                 self.sel_swatch = i as i32;
                 self.sel_lib = -1;
                 self.name_pos = 0;
@@ -304,7 +273,7 @@ impl AppState {
             && my <= self.l_add_y + self.l_btn_h
         {
             let (r8, g8, b8) = hsv_to_rgb(self.hue, self.sat, self.val);
-            let color = rgb(r8, g8, b8) & 0xFFFFFF;
+            let color = pack_color(r8, g8, b8);
             let mut nb = [0u16; 64];
             for j in 0..self.name_pos.min(63) {
                 nb[j] = self.name_buf[j];
@@ -403,15 +372,15 @@ impl AppState {
         let rxs = rx(self, 0);
 
         // Right-click on left panel library → remove entry
-        let lib_row_h = scale_by(30, self.dpi);
+        let lib_card_h = scale_by(LIB_CARD_H_BASE, self.dpi);
         if mx < lx_w() {
             for i in 0..self.library.len() as i32 {
                 let ri = i + self.lib_scroll;
                 if ri < 0 || ri >= self.library.len() as i32 {
                     continue;
                 }
-                let sy = 52 + i * lib_row_h;
-                if mx >= 16 && mx < lx_w() - 4 && my >= sy && my < sy + lib_row_h {
+                let sy = LIB_CARD_TOP + i * lib_card_h;
+                if mx >= 16 && mx < lx_w() - 4 && my >= sy && my < sy + lib_card_h {
                     self.library.remove(ri as usize);
                     save_library(self);
                     if self.sel_lib == ri {
@@ -434,7 +403,7 @@ impl AppState {
             let sy = ps_y + row * (self.l_swatch_sz + self.l_swatch_gap);
             if mx >= sx && mx < sx + self.l_swatch_sz && my >= sy && my < sy + self.l_swatch_sz {
                 let (r8, g8, b8) = hsv_to_rgb(self.hue, self.sat, self.val);
-                self.presets[i as usize] = rgb(r8, g8, b8) & 0xFFFFFF;
+                self.presets[i as usize] = pack_color(r8, g8, b8);
                 save_presets(self);
                 let _ = InvalidateRect(Some(self.hwnd), None, false);
                 return LRESULT(0);
@@ -486,9 +455,9 @@ impl AppState {
     }
 
     pub(crate) unsafe fn on_mousewheel(&mut self, scroll: i32) {
-        let lib_row_h = scale_by(30, self.dpi);
-        if lib_row_h > 0 {
-            let max_scroll = (self.library.len() as i32) - (520 / lib_row_h);
+        let lib_card_h = scale_by(LIB_CARD_H_BASE, self.dpi);
+        if lib_card_h > 0 {
+            let max_scroll = (self.library.len() as i32) - (520 / lib_card_h);
             self.lib_scroll = (self.lib_scroll - scroll / 120)
                 .max(0)
                 .min(max_scroll.max(0));

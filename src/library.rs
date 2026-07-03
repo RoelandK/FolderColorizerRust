@@ -31,7 +31,7 @@ pub(crate) unsafe fn load_presets(a: &mut AppState) {
         }
         let w: Vec<u16> = line.encode_utf16().collect();
         if let Some((r, g, b)) = parse_hex(&w) {
-            a.presets[i] = rgb(r, g, b) & 0xFFFFFF;
+            a.presets[i] = pack_color(r, g, b);
             i += 1;
         }
     }
@@ -42,7 +42,8 @@ pub(crate) unsafe fn save_presets(a: &AppState) {
     let _ = std::fs::create_dir_all(std::path::Path::new(&path).parent().unwrap());
     let mut s = String::new();
     for c in &a.presets {
-        s.push_str(&format!("{:06X}\n", c));
+        let (r, g, b) = unpack_color(*c);
+        s.push_str(&format!("{:02X}{:02X}{:02X}\n", r, g, b));
     }
     let _ = std::fs::write(&path, &s);
 }
@@ -68,7 +69,7 @@ pub(crate) unsafe fn load_library(a: &mut AppState) {
         }
         let w: Vec<u16> = hex.encode_utf16().collect();
         if let Some((r, g, b)) = parse_hex(&w) {
-            a.library.push(rgb(r, g, b) & 0xFFFFFF);
+            a.library.push(pack_color(r, g, b));
             let mut nb = [0u16; 64];
             if let Some(n) = name {
                 let mut j = 0;
@@ -89,7 +90,8 @@ pub(crate) unsafe fn save_library(a: &AppState) {
     let _ = std::fs::create_dir_all(std::path::Path::new(&path).parent().unwrap());
     let mut s = String::new();
     for (i, c) in a.library.iter().enumerate() {
-        s.push_str(&format!("{:06X}|{}\n", c, lib_name(a, i)));
+        let (r, g, b) = unpack_color(*c);
+        s.push_str(&format!("{:02X}{:02X}{:02X}|{}\n", r, g, b, lib_name(a, i)));
     }
     let _ = std::fs::write(&path, &s);
 }

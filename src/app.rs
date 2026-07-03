@@ -1,4 +1,3 @@
-use std::mem::zeroed;
 use std::ptr::null_mut;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
@@ -21,7 +20,9 @@ pub(crate) const COLORS: &[(u32, &str)] = &[
 pub(crate) const REG_ROOT: &str = r"Software\Classes\Folder\shell\Colorize";
 pub(crate) const PIXEL_FORMAT_32BPP_ARGB: i32 = 0x0026200a;
 
-pub(crate) static mut G_GDI_TOKEN: usize = 0;
+use std::sync::atomic::AtomicUsize;
+
+pub(crate) static G_GDI_TOKEN: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) fn get_exe_path() -> String {
     let mut buf = [0u16; 260];
@@ -54,7 +55,6 @@ pub(crate) fn rx(a: &AppState, x: i32) -> i32 {
     lx_w() + 16 + x
 }
 
-#[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) dpi: i32,
     pub(crate) mouse_down: bool,
@@ -81,7 +81,7 @@ pub(crate) struct AppState {
     pub(crate) l_add_y: i32,
     pub(crate) l_browse_y: i32,
     pub(crate) rw: i32,
-    pub(crate) lib_scroll_right: i32,
+
     pub(crate) hue: f32,
     pub(crate) sat: f32,
     pub(crate) val: f32,
@@ -114,7 +114,6 @@ pub(crate) struct AppState {
     pub(crate) lib_names: Vec<[u16; 64]>,
     pub(crate) lib_scroll: i32,
     pub(crate) presets: [u32; 16],
-    pub(crate) presets_dirty: bool,
 }
 
 impl AppState {
@@ -145,7 +144,7 @@ impl AppState {
             l_add_y: 0,
             l_browse_y: 0,
             rw: 0,
-            lib_scroll_right: 0,
+
             hue: 0.0,
             sat: 0.0,
             val: 0.0,
@@ -181,11 +180,11 @@ impl AppState {
                 let mut p = [0u32; 16];
                 for i in 0..16 {
                     let (r, g, b) = SWATCHES[i];
-                    p[i] = rgb(r, g, b) & 0xFFFFFF;
+                    p[i] = pack_color(r, g, b);
                 }
                 p
             },
-            presets_dirty: false,
+
         }
     }
 
@@ -232,10 +231,6 @@ impl AppState {
             GdipDisposeImage(self.wheel_bitmap as *mut GpImage);
             self.wheel_bitmap = null_mut();
         }
-        if !self.wheel_graphics.is_null() {
-            GdipDeleteGraphics(self.wheel_graphics);
-            self.wheel_graphics = null_mut();
-        }
 
         let status = GdipCreateBitmapFromScan0(
             sz,
@@ -249,46 +244,42 @@ impl AppState {
             return;
         }
 
-        GdipGetImageGraphicsContext(self.wheel_bitmap as *mut GpImage, &mut self.wheel_graphics);
-        if self.wheel_graphics.is_null() {
-            GdipDisposeImage(self.wheel_bitmap as *mut GpImage);
-            self.wheel_bitmap = null_mut();
-            return;
-        }
-
-        GdipSetSmoothingMode(self.wheel_graphics, SmoothingModeHighSpeed);
-
         let cx = sz as f32 / 2.0;
         let cy = sz as f32 / 2.0;
-        let r = cx;
+        let radius = cx;
         let v = self.val;
 
+        let rect = Rect {
+            X: 0,
+            Y: 0,
+            Width: sz,
+            Height: sz,
+        };
+        let mut bmd = BitmapData::default();
+        if GdipBitmapLockBits(self.wheel_bitmap, &rect, 3u32, PIXEL_FORMAT_32BPP_ARGB, &mut bmd).0
+            != 0
+        {
+            return;
+        }
+        let pixels = bmd.Scan0 as *mut u32;
+        let stride = bmd.Stride as usize / 4;
         for y in 0..sz {
             for x in 0..sz {
                 let dx = x as f32 - cx;
                 let dy = y as f32 - cy;
-                let dist = (dx * dx + dy * dy).sqrt() / r;
-                if dist > 1.0 {
-                    continue;
-                }
-                let ang = (-dy).atan2(dx) / (2.0 * std::f32::consts::PI) + 0.25;
-                let h = ang - ang.floor();
-                let (r8, g8, b8) = hsv_to_rgb(h, dist, v);
-                let mut brush: *mut GpSolidFill = null_mut();
-                GdipCreateSolidFill(gdi_color(r8, g8, b8), &mut brush);
-                if !brush.is_null() {
-                    GdipFillRectangleI(
-                        self.wheel_graphics,
-                        brush as *mut GpBrush,
-                        x as i32,
-                        y as i32,
-                        1,
-                        1,
-                    );
-                    GdipDeleteBrush(brush as *mut GpBrush);
-                }
+                let dist = (dx * dx + dy * dy).sqrt() / radius;
+                let pixel = if dist <= 1.0 {
+                    let ang = (-dy).atan2(dx) / (2.0 * std::f32::consts::PI) + 0.25;
+                    let h = ang - ang.floor();
+                    let (r8, g8, b8) = hsv_to_rgb(h, dist, v);
+                    gdi_argb(r8, g8, b8)
+                } else {
+                    0x00000000
+                };
+                *pixels.add(y as usize * stride + x as usize) = pixel;
             }
         }
+        GdipBitmapUnlockBits(self.wheel_bitmap, &mut bmd);
 
         self.wheel_brightness = self.val;
         self.wheel_size = sz;
