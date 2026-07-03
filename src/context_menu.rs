@@ -2,11 +2,9 @@ use std::os::windows::ffi::OsStrExt;
 use windows::Win32::Foundation::*;
 use windows::Win32::System::Registry::*;
 use windows::Win32::UI::Shell::*;
-use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::app::AppState;
 use crate::app::{cast_bytes, get_exe_path, COLORS, REG_ROOT};
-use crate::color::*;
 use crate::icon::{generate_ico, get_cache_dir};
 
 unsafe fn write_separator(key: &str) {

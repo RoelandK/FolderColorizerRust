@@ -9,6 +9,9 @@ use crate::app::{lx_w, rx};
 use crate::color::*;
 use crate::library::lib_name;
 
+pub(crate) const LIB_CARD_TOP: i32 = 56;
+pub(crate) const LIB_CARD_H_BASE: i32 = 34;
+
 unsafe fn fill_rect(hdc: HDC, x: i32, y: i32, w: i32, h: i32, brush: HBRUSH) {
     let r = RECT {
         left: x,
@@ -43,7 +46,7 @@ unsafe fn draw_txt(
 }
 
 unsafe fn draw_btn(hdc: HDC, x: i32, y: i32, w: i32, h: i32, text: &[u16]) {
-    let btn_b = CreateSolidBrush(COLORREF(rgb(0x37, 0x3A, 0x43)));
+    let btn_b = CreateSolidBrush(COLORREF(colorref(0x37, 0x3A, 0x43)));
     fill_rect(hdc, x, y, w, h, btn_b);
     let _ = DeleteObject(btn_b.into());
     let mut r = RECT {
@@ -53,12 +56,12 @@ unsafe fn draw_btn(hdc: HDC, x: i32, y: i32, w: i32, h: i32, text: &[u16]) {
         bottom: y + h,
     };
     let old_pen = SelectObject(hdc, GetStockObject(DC_PEN));
-    let _ = SetDCPenColor(hdc, COLORREF(rgb(0x55, 0x55, 0x55)));
+    let _ = SetDCPenColor(hdc, COLORREF(colorref(0x55, 0x55, 0x55)));
     let old_brush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
     let _ = Rectangle(hdc, x, y, x + w, y + h);
     let _ = SelectObject(hdc, old_brush);
     let _ = SelectObject(hdc, old_pen);
-    let _ = SetTextColor(hdc, COLORREF(rgb(0xCC, 0xCC, 0xCC)));
+    let _ = SetTextColor(hdc, COLORREF(colorref(0xCC, 0xCC, 0xCC)));
     let _ = SetBkMode(hdc, TRANSPARENT);
     let mut text_mut: Vec<u16> = text.to_vec();
     let _ = DrawTextW(
@@ -117,7 +120,7 @@ impl AppState {
             16,
             16,
             &lib_lbl,
-            COLORREF(rgb(0xCC, 0xCC, 0xCC)),
+            COLORREF(colorref(0xCC, 0xCC, 0xCC)),
             self.bf,
             lx_w() - 32,
         );
@@ -127,15 +130,15 @@ impl AppState {
             16,
             38,
             &sub_lbl,
-            COLORREF(rgb(0x88, 0x88, 0x88)),
+            COLORREF(colorref(0x88, 0x88, 0x88)),
             self.sf,
             lx_w() - 32,
         );
     }
 
     unsafe fn paint_library_cards(&self, dc: HDC, w: i32, h: i32) {
-        let lib_card_h = scale_by(34, self.dpi);
-        let lib_top = 56;
+        let lib_card_h = scale_by(LIB_CARD_H_BASE, self.dpi);
+        let lib_top = LIB_CARD_TOP;
         let lib_h = h - lib_top;
         let lib_rows = if lib_card_h > 0 {
             lib_h / lib_card_h
@@ -150,7 +153,7 @@ impl AppState {
                 16,
                 52,
                 &empty,
-                COLORREF(rgb(0x66, 0x66, 0x66)),
+                COLORREF(colorref(0x66, 0x66, 0x66)),
                 self.sf,
                 lx_w() - 32,
             );
@@ -164,19 +167,17 @@ impl AppState {
 
                 let is_sel = self.sel_lib == ri;
                 let card_bg = if is_sel {
-                    rgb(0x3A, 0x3D, 0x47)
+                    colorref(0x3A, 0x3D, 0x47)
                 } else {
-                    rgb(0x2A, 0x2C, 0x34)
+                    colorref(0x2A, 0x2C, 0x34)
                 };
                 let card_b = CreateSolidBrush(COLORREF(card_bg));
                 fill_rect(dc, 8, sy, lx_w() - 16, lib_card_h - 2, card_b);
                 let _ = DeleteObject(card_b.into());
 
                 let c = self.library[ri as usize];
-                let cr = (c >> 16) as u8;
-                let cg = (c >> 8) as u8;
-                let cb = c as u8;
-                let sw_b = CreateSolidBrush(COLORREF(rgb(cr, cg, cb)));
+                let (cr, cg, cb) = unpack_color(c);
+                let sw_b = CreateSolidBrush(COLORREF(colorref(cr, cg, cb)));
                 fill_rect(
                     dc,
                     14,
@@ -198,7 +199,7 @@ impl AppState {
                     52,
                     sy + 6,
                     &nm_w,
-                    COLORREF(rgb(0xCC, 0xCC, 0xCC)),
+                    COLORREF(colorref(0xCC, 0xCC, 0xCC)),
                     self.bf,
                     lx_w() - 170,
                 );
@@ -207,11 +208,11 @@ impl AppState {
                 let ap_x = lx_w() - 102;
                 let ap_w = scale_by(44, self.dpi);
                 let ap_h = scale_by(22, self.dpi);
-                let ap_b = CreateSolidBrush(COLORREF(rgb(0x37, 0x3A, 0x43)));
+                let ap_b = CreateSolidBrush(COLORREF(colorref(0x37, 0x3A, 0x43)));
                 fill_rect(dc, ap_x, sy + 6, ap_w, ap_h, ap_b);
                 let _ = DeleteObject(ap_b.into());
                 let ap_pen = SelectObject(dc, GetStockObject(DC_PEN));
-                SetDCPenColor(dc, COLORREF(rgb(0x55, 0x55, 0x55)));
+                SetDCPenColor(dc, COLORREF(colorref(0x55, 0x55, 0x55)));
                 let ap_brush = SelectObject(dc, GetStockObject(NULL_BRUSH));
                 Rectangle(dc, ap_x, sy + 6, ap_x + ap_w, sy + 6 + ap_h);
                 SelectObject(dc, ap_brush);
@@ -223,7 +224,7 @@ impl AppState {
                     right: ap_x + ap_w,
                     bottom: sy + 6 + ap_h,
                 };
-                SetTextColor(dc, COLORREF(rgb(0xAA, 0xCC, 0xFF)));
+                SetTextColor(dc, COLORREF(colorref(0xAA, 0xCC, 0xFF)));
                 SetBkMode(dc, TRANSPARENT);
                 DrawTextW(
                     dc,
@@ -235,15 +236,15 @@ impl AppState {
                 // Remove (✕) button
                 let rm_x = ap_x + ap_w + 4;
                 let rm_sz = ap_h;
-                let rm_b = CreateSolidBrush(COLORREF(rgb(0x43, 0x2C, 0x2C)));
+                let rm_b = CreateSolidBrush(COLORREF(colorref(0x43, 0x2C, 0x2C)));
                 fill_rect(dc, rm_x, sy + 6, rm_sz, rm_sz, rm_b);
                 let _ = DeleteObject(rm_b.into());
                 let rm_pen = SelectObject(dc, GetStockObject(DC_PEN));
-                SetDCPenColor(dc, COLORREF(rgb(0x88, 0x44, 0x44)));
+                SetDCPenColor(dc, COLORREF(colorref(0x88, 0x44, 0x44)));
                 SelectObject(dc, GetStockObject(NULL_BRUSH));
                 Rectangle(dc, rm_x, sy + 6, rm_x + rm_sz, sy + 6 + rm_sz);
                 SelectObject(dc, rm_pen);
-                let x_pen = CreatePen(PS_SOLID, 2, COLORREF(rgb(0xFF, 0x66, 0x66)));
+                let x_pen = CreatePen(PS_SOLID, 2, COLORREF(colorref(0xFF, 0x66, 0x66)));
                 let old_xp = SelectObject(dc, x_pen.into());
                 MoveToEx(dc, rm_x + 5, sy + 6 + 5, None);
                 LineTo(dc, rm_x + rm_sz - 5, sy + 6 + rm_sz - 5);
@@ -267,10 +268,8 @@ impl AppState {
             let sx = ps_x + col * (ps_sz + ps_gap);
             let sy = ps_y + row * (ps_sz + ps_gap);
             let c = self.presets[idx as usize];
-            let cr = (c >> 16) as u8;
-            let cg = (c >> 8) as u8;
-            let cb = c as u8;
-            let brush = CreateSolidBrush(COLORREF(rgb(cr, cg, cb)));
+            let (cr, cg, cb) = unpack_color(c);
+            let brush = CreateSolidBrush(COLORREF(colorref(cr, cg, cb)));
             fill_rect(dc, sx, sy, ps_sz, ps_sz, brush);
             let _ = DeleteObject(brush.into());
             if self.sel_swatch == idx as i32 {
@@ -290,7 +289,7 @@ impl AppState {
             rxs,
             20,
             &ed_lbl,
-            COLORREF(rgb(0xCC, 0xCC, 0xCC)),
+            COLORREF(colorref(0xCC, 0xCC, 0xCC)),
             self.bf,
             300,
         );
@@ -308,7 +307,7 @@ impl AppState {
         // Selection indicator on wheel
         if self.wheel_set {
             let old_b = SelectObject(dc, GetStockObject(NULL_BRUSH));
-            let ip = CreatePen(PS_SOLID, 2, COLORREF(rgb(0xFF, 0xFF, 0xFF)));
+            let ip = CreatePen(PS_SOLID, 2, COLORREF(colorref(0xFF, 0xFF, 0xFF)));
             let old_p = SelectObject(dc, ip.into());
             let _ = Rectangle(
                 dc,
@@ -320,7 +319,7 @@ impl AppState {
             let _ = SelectObject(dc, old_p);
             let _ = DeleteObject(ip.into());
             let _ = SelectObject(dc, old_b);
-            let ib = CreateSolidBrush(COLORREF(rgb(0x3C, 0x3F, 0x48)));
+            let ib = CreateSolidBrush(COLORREF(colorref(0x3C, 0x3F, 0x48)));
             let old_b2 = SelectObject(dc, ib.into());
             let _ = Rectangle(
                 dc,
@@ -344,7 +343,7 @@ impl AppState {
                 let t = bx as f32 / bw as f32;
                 let (r8, g8, b8) = hsv_to_rgb(self.hue, self.sat, t);
                 let mut brush: *mut GpSolidFill = null_mut();
-                GdipCreateSolidFill(gdi_color(r8, g8, b8), &mut brush);
+                GdipCreateSolidFill(gdi_argb(r8, g8, b8), &mut brush);
                 if !brush.is_null() {
                     GdipFillRectangleI(bgr, brush as *mut GpBrush, rxs + bx, by, 1, bh);
                     GdipDeleteBrush(brush as *mut GpBrush);
@@ -362,11 +361,11 @@ impl AppState {
         let py = self.l_preview_y;
         let psz = self.l_preview_sz;
         let (pr, pg, pb) = hsv_to_rgb(self.hue, self.sat, self.val);
-        let prev_b = CreateSolidBrush(COLORREF(rgb(pr, pg, pb)));
+        let prev_b = CreateSolidBrush(COLORREF(colorref(pr, pg, pb)));
         fill_rect(dc, rxs, py, psz, psz, prev_b);
         let _ = DeleteObject(prev_b.into());
         let old_pb = SelectObject(dc, GetStockObject(DC_PEN));
-        let _ = SetDCPenColor(dc, COLORREF(rgb(0x55, 0x55, 0x55)));
+        let _ = SetDCPenColor(dc, COLORREF(colorref(0x55, 0x55, 0x55)));
         let _ = SelectObject(dc, GetStockObject(NULL_BRUSH));
         let _ = Rectangle(dc, rxs, py, rxs + psz, py + psz);
         let _ = SelectObject(dc, old_pb);
@@ -378,7 +377,7 @@ impl AppState {
             rxs + psz + 16,
             py,
             &name_lbl,
-            COLORREF(rgb(0x88, 0x88, 0x88)),
+            COLORREF(colorref(0x88, 0x88, 0x88)),
             self.sf,
             100,
         );
@@ -402,7 +401,7 @@ impl AppState {
             name_x + 4,
             name_y + 2,
             &name_str,
-            COLORREF(rgb(0xCC, 0xCC, 0xCC)),
+            COLORREF(colorref(0xCC, 0xCC, 0xCC)),
             self.bf,
             name_w - 8,
         );
@@ -415,7 +414,7 @@ impl AppState {
             name_x,
             hex_y,
             &hex_lbl,
-            COLORREF(rgb(0x88, 0x88, 0x88)),
+            COLORREF(colorref(0x88, 0x88, 0x88)),
             self.sf,
             60,
         );
@@ -444,7 +443,7 @@ impl AppState {
             name_x + 4,
             hex_sy + 2,
             &hex_label,
-            COLORREF(rgb(0xAA, 0xCC, 0xFF)),
+            COLORREF(colorref(0xAA, 0xCC, 0xFF)),
             self.bf,
             name_w.min(90) - 8,
         );
@@ -475,7 +474,7 @@ impl AppState {
                 rxs + 90 + 12,
                 self.l_browse_y + 4,
                 &fp_w,
-                COLORREF(rgb(0x88, 0x88, 0x88)),
+                COLORREF(colorref(0x88, 0x88, 0x88)),
                 self.sf,
                 rw - 24 - 90 - 12,
             );
@@ -507,9 +506,9 @@ impl AppState {
         let cb_x = rxs + 90 + 12;
         let cs = 14;
         let cb_brush = CreateSolidBrush(if self.ctx_menu {
-            COLORREF(rgb(0x34, 0x98, 0xDB))
+            COLORREF(colorref(0x34, 0x98, 0xDB))
         } else {
-            COLORREF(rgb(0x33, 0x33, 0x33))
+            COLORREF(colorref(0x33, 0x33, 0x33))
         });
         fill_rect(
             dc,
@@ -521,7 +520,7 @@ impl AppState {
         );
         let _ = DeleteObject(cb_brush.into());
         let old_p3 = SelectObject(dc, GetStockObject(DC_PEN));
-        let _ = SetDCPenColor(dc, COLORREF(rgb(0x66, 0x66, 0x66)));
+        let _ = SetDCPenColor(dc, COLORREF(colorref(0x66, 0x66, 0x66)));
         let _ = SelectObject(dc, GetStockObject(NULL_BRUSH));
         let _ = Rectangle(
             dc,
@@ -557,7 +556,7 @@ impl AppState {
             cb_x + cs + 8,
             self.l_browse_y + 4,
             &cb_lbl,
-            COLORREF(rgb(0x88, 0x88, 0x88)),
+            COLORREF(colorref(0x88, 0x88, 0x88)),
             self.sf,
             rw - cb_x - cs - 24,
         );
@@ -573,7 +572,7 @@ impl AppState {
                 rxs,
                 self.l_browse_y + self.l_btn_sm * 2 + 16,
                 &st_w,
-                COLORREF(rgb(0x00, 0xCC, 0x66)),
+                COLORREF(colorref(0x00, 0xCC, 0x66)),
                 self.bf,
                 rw - 48,
             );

@@ -1,8 +1,6 @@
-use std::ffi::c_void;
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr::null_mut;
-use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::GdiPlus::*;
 use windows::Win32::Storage::FileSystem::*;
 
@@ -34,12 +32,12 @@ unsafe fn render_folder_bitmap(gr: *mut GpGraphics, w: i32, h: i32, r: u8, g: u8
     if !body.is_null() {
         GdipAddPathRectangleI(body, margin, body_y, w - margin * 2, body_h - margin);
         let mut brush: *mut GpSolidFill = null_mut();
-        GdipCreateSolidFill(gdi_color(r, g, b), &mut brush);
+        GdipCreateSolidFill(gdi_argb(r, g, b), &mut brush);
         if !brush.is_null() {
             GdipFillPath(gr, brush as *mut GpBrush, body);
             let mut shade: *mut GpSolidFill = null_mut();
             GdipCreateSolidFill(
-                gdi_color(
+                gdi_argb(
                     (r as f32 * 0.5) as u8,
                     (g as f32 * 0.5) as u8,
                     (b as f32 * 0.5) as u8,
@@ -70,17 +68,17 @@ unsafe fn render_folder_bitmap(gr: *mut GpGraphics, w: i32, h: i32, r: u8, g: u8
         let tr = ((r as i32 + (255 - r as i32) / 2).min(255)) as u8;
         let tg = ((g as i32 + (255 - g as i32) / 2).min(255)) as u8;
         let tb = ((b as i32 + (255 - b as i32) / 2).min(255)) as u8;
-        GdipCreateSolidFill(gdi_color(tr, tg, tb), &mut tbrush);
+        GdipCreateSolidFill(gdi_argb(tr, tg, tb), &mut tbrush);
         if !tbrush.is_null() {
             GdipFillPath(gr, tbrush as *mut GpBrush, tab);
             GdipDeleteBrush(tbrush as *mut GpBrush);
         }
         let mut hl: *mut GpSolidFill = null_mut();
         GdipCreateSolidFill(
-            gdi_color(
-                255.max(tr + 30).min(255) as u8,
-                255.max(tg + 30).min(255) as u8,
-                255.max(tb + 30).min(255) as u8,
+            gdi_argb(
+                (tr as u16 + 30).min(255) as u8,
+                (tg as u16 + 30).min(255) as u8,
+                (tb as u16 + 30).min(255) as u8,
             ),
             &mut hl,
         );
@@ -215,9 +213,9 @@ fn draw_folder(img: &mut image::RgbaImage, sz: u32, r: u8, g: u8, b: u8) {
                 let tb = ((b as i32 + (255 - b as i32) / 2).min(255)) as u8;
                 let c = if in_tab_hl {
                     image::Rgba([
-                        255.max(tr + 30).min(255) as u8,
-                        255.max(tg + 30).min(255) as u8,
-                        255.max(tb + 30).min(255) as u8,
+                        (tr as u16 + 30).min(255) as u8,
+                        (tg as u16 + 30).min(255) as u8,
+                        (tb as u16 + 30).min(255) as u8,
                         255,
                     ])
                 } else {

@@ -1,5 +1,33 @@
-pub(crate) fn rgb(r: u8, g: u8, b: u8) -> u32 {
+pub(crate) fn colorref(r: u8, g: u8, b: u8) -> u32 {
     (r as u32) | ((g as u32) << 8) | ((b as u32) << 16)
+}
+
+pub(crate) fn pack_color(r: u8, g: u8, b: u8) -> u32 {
+    ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
+}
+
+pub(crate) fn unpack_color(c: u32) -> (u8, u8, u8) {
+    ((c >> 16) as u8, (c >> 8) as u8, c as u8)
+}
+
+pub(crate) fn rgb_to_hsv(r: u8, g: u8, b: u8) -> (f32, f32, f32) {
+    let rf = r as f32 / 255.0;
+    let gf = g as f32 / 255.0;
+    let bf = b as f32 / 255.0;
+    let max = rf.max(gf).max(bf);
+    let min = rf.min(gf).min(bf);
+    let d = max - min;
+    let hue = if d == 0.0 {
+        0.0
+    } else if max == rf {
+        60.0 * ((gf - bf) / d).rem_euclid(6.0)
+    } else if max == gf {
+        60.0 * ((bf - rf) / d + 2.0)
+    } else {
+        60.0 * ((rf - gf) / d + 4.0)
+    };
+    let s = if max == 0.0 { 0.0 } else { d / max };
+    (hue / 360.0, s, max)
 }
 
 pub(crate) const SWATCHES: [(u8, u8, u8); 16] = [
@@ -21,7 +49,7 @@ pub(crate) const SWATCHES: [(u8, u8, u8); 16] = [
     (0xFF, 0xFF, 0xFF),
 ];
 
-pub(crate) fn gdi_color(r: u8, g: u8, b: u8) -> u32 {
+pub(crate) fn gdi_argb(r: u8, g: u8, b: u8) -> u32 {
     (0xFFu32 << 24) | ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
 }
 
