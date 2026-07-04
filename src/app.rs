@@ -54,7 +54,6 @@ pub(crate) fn rx(a: &AppState, x: i32) -> i32 {
     lx_w() + 16 + x
 }
 
-#[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) dpi: i32,
     pub(crate) mouse_down: bool,
@@ -256,38 +255,50 @@ impl AppState {
             return;
         }
 
-        GdipSetSmoothingMode(self.wheel_graphics, SmoothingModeHighSpeed);
-
         let cx = sz as f32 / 2.0;
         let cy = sz as f32 / 2.0;
         let r = cx;
         let v = self.val;
 
-        for y in 0..sz {
-            for x in 0..sz {
-                let dx = x as f32 - cx;
-                let dy = y as f32 - cy;
-                let dist = (dx * dx + dy * dy).sqrt() / r;
-                if dist > 1.0 {
-                    continue;
-                }
-                let ang = (-dy).atan2(dx) / (2.0 * std::f32::consts::PI) + 0.25;
-                let h = ang - ang.floor();
-                let (r8, g8, b8) = hsv_to_rgb(h, dist, v);
-                let mut brush: *mut GpSolidFill = null_mut();
-                GdipCreateSolidFill(gdi_color(r8, g8, b8), &mut brush);
-                if !brush.is_null() {
-                    GdipFillRectangleI(
-                        self.wheel_graphics,
-                        brush as *mut GpBrush,
-                        x as i32,
-                        y as i32,
-                        1,
-                        1,
-                    );
-                    GdipDeleteBrush(brush as *mut GpBrush);
+        let rect = Rect {
+            X: 0,
+            Y: 0,
+            Width: sz,
+            Height: sz,
+        };
+        let mut bmd = BitmapData::default();
+        if GdipBitmapLockBits(
+            self.wheel_bitmap,
+            &rect,
+            2u32,
+            PIXEL_FORMAT_32BPP_ARGB,
+            &mut bmd,
+        )
+        .0 == 0
+            && !bmd.Scan0.is_null()
+        {
+            let stride = bmd.Stride;
+            let pixels =
+                std::slice::from_raw_parts_mut(bmd.Scan0 as *mut u8, (stride * sz) as usize);
+            for y in 0..sz {
+                for x in 0..sz {
+                    let dx = x as f32 - cx;
+                    let dy = y as f32 - cy;
+                    let dist = (dx * dx + dy * dy).sqrt() / r;
+                    if dist > 1.0 {
+                        continue;
+                    }
+                    let ang = (-dy).atan2(dx) / (2.0 * std::f32::consts::PI) + 0.25;
+                    let h = ang - ang.floor();
+                    let (r8, g8, b8) = hsv_to_rgb(h, dist, v);
+                    let offset = (y * stride + x * 4) as usize;
+                    pixels[offset + 0] = b8; // BGRA
+                    pixels[offset + 1] = g8;
+                    pixels[offset + 2] = r8;
+                    pixels[offset + 3] = 255;
                 }
             }
+            GdipBitmapUnlockBits(self.wheel_bitmap, &mut bmd);
         }
 
         self.wheel_brightness = self.val;
